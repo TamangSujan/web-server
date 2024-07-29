@@ -1,6 +1,8 @@
 package http.request;
 
 import java.io.*;
+import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -9,6 +11,7 @@ public class WebHttpRequest {
     private String requesterAddress;
     private String contentType;
     private String method;
+    private Map<String, String> parameters;
 
     public WebHttpRequest(InputStream stream) throws IOException {
         List<String> httpRequestLines = WebHttpRequestHandler.getHttpRequestLines(stream);
@@ -21,6 +24,7 @@ public class WebHttpRequest {
         setRequesterAddress(httpRequestMap);
         setContentType(httpRequestMap);
         setMethod(httpRequestMap);
+        setParameters(httpRequestMap);
     }
 
     public String getServerPath(){
@@ -39,9 +43,19 @@ public class WebHttpRequest {
         return method;
     }
 
+    public Map<String, String> getParameters(){
+        return parameters;
+    }
+
     private void setServerPath(Map<String, String> httpRequestMap){
-        if(httpRequestMap.containsKey("Url"))
-            serverPath = httpRequestMap.get("Url");
+        if(httpRequestMap.containsKey("Url")){
+            String url = httpRequestMap.get("Url");
+            int queryIndex = url.indexOf('?');
+            if(queryIndex == -1)
+                serverPath = url;
+            else
+                serverPath = url.substring(0, queryIndex);
+        }
     }
 
     private void setRequesterAddress(Map<String, String> httpRequestMap){
@@ -56,6 +70,35 @@ public class WebHttpRequest {
     private void setMethod(Map<String, String> httpRequestMap){
         if(httpRequestMap.containsKey("Method"))
             method = httpRequestMap.get("Method");
+    }
+
+    private void setParameters(Map<String, String> httpRequest){
+        parameters = new HashMap<>();
+        String url = httpRequest.get("Url");
+        if(url.contains("?")){
+            String urlQuery = url.substring(url.indexOf("?") + 1);
+            if(!urlQuery.isEmpty()){
+                List<String> queries = getUrlQueries(urlQuery);
+                for(String query: queries){
+                    if(query.contains("=")){
+                        parameters.put(query.substring(0, query.indexOf("=")), query.substring(query.indexOf("=")+1));
+                    }
+                }
+            }
+        }
+    }
+
+    private List<String> getUrlQueries(String query){
+        List<String> queries = new LinkedList<>();
+        String tempQuery;
+        while(query.contains("&")){
+             tempQuery = query.substring(0, query.indexOf('&'));
+             query = query.substring(query.indexOf('&') + 1);
+             queries.add(tempQuery);
+        }
+        if(!query.isEmpty())
+            queries.add(query);
+        return queries;
     }
 
     public String toString(){

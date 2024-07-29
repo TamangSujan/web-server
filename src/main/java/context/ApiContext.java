@@ -1,21 +1,22 @@
 package context;
 
 import annotations.Api;
+import annotations.ApiRequestParam;
 import annotations.GetApi;
 import annotations.PostApi;
-import function.ResponseFunction;
 import http.request.WebHttpRequest;
 import http.response.ResponseEntity;
 import utils.clazz.ClassHandler;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class ApiContext {
-    private final Map<String, Map<String, ResponseEntity>> apiContextMap = new HashMap<>();
+    private final Map<String, Map<String, List<Object>>> apiContextMap = new HashMap<>();
     private static ApiContext apiContext;
     private ApiContext(){
         List<Class<?>> classes = null;
@@ -50,7 +51,7 @@ public class ApiContext {
             if(!apiContextMap.containsKey("GET"))
                 apiContextMap.put("GET", new HashMap<>());
             try{
-                apiContextMap.get("GET").put(method.getAnnotation(GetApi.class).url(), getFunction(clazz.getDeclaredConstructor().newInstance(), method));
+                apiContextMap.get("GET").put(method.getAnnotation(GetApi.class).url(), List.of(clazz.getDeclaredConstructor().newInstance(), method));
             }catch (NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException ignored){
 
             }
@@ -62,22 +63,14 @@ public class ApiContext {
             if(!apiContextMap.containsKey("POST"))
                 apiContextMap.put("POST", new HashMap<>());
             try {
-                apiContextMap.get("POST").put(method.getAnnotation(PostApi.class).url(), getFunction(clazz.getDeclaredConstructor().newInstance(), method));
+                apiContextMap.get("POST").put(method.getAnnotation(PostApi.class).url(), List.of(clazz.getDeclaredConstructor().newInstance(), method));
             }catch (NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException ignored){
 
             }
         }
     }
 
-    private ResponseEntity getFunction(Object clazz, Method method) {
-        try {
-            return (ResponseEntity) method.invoke(clazz);
-        } catch (IllegalAccessException | InvocationTargetException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public ResponseEntity getResponse(WebHttpRequest request) {
+    public ResponseEntity getResponse(WebHttpRequest request){
         if(!apiContextMap.containsKey(request.getMethod())){
             System.err.println("No such method: "+request.getMethod());
             return new ResponseEntity(404, "Error", "No such method: "+request.getMethod());
@@ -86,6 +79,25 @@ public class ApiContext {
             System.err.println("No such url: "+request.getServerPath());
             return new ResponseEntity(404, "Error", "No such url: "+request.getServerPath());
         }
-        return apiContextMap.get(request.getMethod()).get(request.getServerPath());
+        List<Object> classMethod  = apiContextMap.get(request.getMethod()).get(request.getServerPath());
+        Method method = (Method) classMethod.get(1);
+        Object[] attributeValues = getAttributeValuesFromWebRequest(method.getParameters(), request);
+        try {
+            return (ResponseEntity) method.invoke(classMethod.getFirst(), attributeValues);
+        } catch (IllegalAccessException | InvocationTargetException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private Object[] getAttributeValuesFromWebRequest(Parameter[] parameters, WebHttpRequest request){
+        Object[] attributeValues = new Object[parameters.length];
+        for(int index=0; index< parameters.length; index++){
+            if(parameters[index].getAnnotation(ApiRequestParam.class)!=null){
+                attributeValues[index] = request.getParameters().get(parameters[index].getAnnotation(ApiRequestParam.class).key());
+            }else{
+                attributeValues[index] = null;
+            }
+        }
+        return attributeValues;
     }
 }
