@@ -1,12 +1,10 @@
 package context;
 
-import annotations.Api;
-import annotations.ApiRequestParam;
-import annotations.GetApi;
-import annotations.PostApi;
+import annotations.*;
 import http.request.WebHttpRequest;
 import http.response.ResponseEntity;
 import utils.clazz.ClassHandler;
+import utils.string.StringUtils;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -75,13 +73,19 @@ public class ApiContext {
             System.err.println("No such method: "+request.getMethod());
             return new ResponseEntity(404, "Error", "No such method: "+request.getMethod());
         }
-        if(!apiContextMap.get(request.getMethod()).containsKey(request.getServerPath())){
+        /*if(!apiContextMap.get(request.getMethod()).containsKey(request.getServerPath())){
+            System.err.println("No such url: "+request.getServerPath());
+            return new ResponseEntity(404, "Error", "No such url: "+request.getServerPath());
+        }*/
+        Map<String, List<Object>> apiAnnotationUrlsKeyMap = apiContextMap.get(request.getMethod());
+        String matchedKey = getMatchedAnnotationUrl(apiAnnotationUrlsKeyMap, request.getServerPath());
+        if(matchedKey == null){
             System.err.println("No such url: "+request.getServerPath());
             return new ResponseEntity(404, "Error", "No such url: "+request.getServerPath());
         }
-        List<Object> classMethod  = apiContextMap.get(request.getMethod()).get(request.getServerPath());
+        List<Object> classMethod  = apiAnnotationUrlsKeyMap.get(matchedKey);
         Method method = (Method) classMethod.get(1);
-        Object[] attributeValues = getAttributeValuesFromWebRequest(method.getParameters(), request);
+        Object[] attributeValues = getAttributeValuesFromWebRequest(method.getParameters(), request, matchedKey);
         try {
             return (ResponseEntity) method.invoke(classMethod.getFirst(), attributeValues);
         } catch (IllegalAccessException | InvocationTargetException e) {
@@ -89,15 +93,72 @@ public class ApiContext {
         }
     }
 
-    private Object[] getAttributeValuesFromWebRequest(Parameter[] parameters, WebHttpRequest request){
-        Object[] attributeValues = new Object[parameters.length];
-        for(int index=0; index< parameters.length; index++){
-            if(parameters[index].getAnnotation(ApiRequestParam.class)!=null){
-                attributeValues[index] = request.getParameters().get(parameters[index].getAnnotation(ApiRequestParam.class).key());
-            }else{
-                attributeValues[index] = null;
+    private String getMatchedAnnotationUrl(Map<String, List<Object>> apiAnnotationUrlMap, String requestUrl){
+        for(String apiUrl: apiAnnotationUrlMap.keySet()){
+            if(!isUrlSlashesEqual(apiUrl, requestUrl))
+                continue;
+            String originalApiUrl = apiUrl;
+            String tempRequestUrl = requestUrl;
+            while(apiUrl.contains("/{")){
+                int startIndex = apiUrl.indexOf("/{");
+                int endIndex = apiUrl.indexOf("}");
+                apiUrl = apiUrl.substring(0, startIndex) + "/v" + apiUrl.substring(endIndex+1);
+                String lastPart = tempRequestUrl.substring(startIndex + 1);
+                if(lastPart.contains("/"))
+                    tempRequestUrl = tempRequestUrl.substring(0, startIndex) + "/v" + lastPart.substring(lastPart.indexOf("/"));
+                else
+                    tempRequestUrl = tempRequestUrl.substring(0, startIndex) + "/v";
             }
+            if(apiUrl.equals(tempRequestUrl))
+                return originalApiUrl;
+        }
+        return null;
+    }
+
+    private boolean isUrlSlashesEqual(String url1, String url2){
+        return StringUtils.getCharCount(url1, '/') == StringUtils.getCharCount(url2, '/');
+    }
+
+    private Object[] getAttributeValuesFromWebRequest(Parameter[] parameters, WebHttpRequest request, String apiAnnotationUrl){
+        Object[] attributeValues = new Object[parameters.length];
+        Map<String, String> pathVariables = getPathVariables(apiAnnotationUrl, request.getServerPath());
+        for(int index=0; index< parameters.length; index++){
+            if(parameters[index].getAnnotation(ApiRequestParam.class)!=null) {
+                attributeValues[index] = request.getParameters().get(parameters[index].getAnnotation(ApiRequestParam.class).key());
+                continue;
+            }
+            if(parameters[index].getAnnotation(ApiPathVariable.class)!=null){
+                String pathVariableName = parameters[index].getAnnotation(ApiPathVariable.class).name();
+                if(pathVariables.containsKey(pathVariableName)){
+                    attributeValues[index] = pathVariables.get(pathVariableName);
+                    continue;
+                }
+            }
+            attributeValues[index] = null;
         }
         return attributeValues;
+    }
+
+    private Map<String, String> getPathVariables(String apiAnnotationUrl, String webRequestUrl){
+        Map<String, String> pathVariables = new HashMap<>();
+        while(apiAnnotationUrl.contains("/{")){
+                int startIndex = apiAnnotationUrl.indexOf("/{");
+                int endIndex = apiAnnotationUrl.indexOf("}");
+                String variableName = apiAnnotationUrl.substring(startIndex+2, endIndex);
+                String lastRequestUrl = webRequestUrl.substring(startIndex + 1);
+                String variableValue = null;
+                if(lastRequestUrl.contains("/")) {
+                    variableValue = lastRequestUrl.substring(0, lastRequestUrl.indexOf("/"));
+                    webRequestUrl = lastRequestUrl.substring(lastRequestUrl.indexOf("/"));
+                }
+                else {
+                    variableValue = lastRequestUrl;
+                    webRequestUrl = lastRequestUrl;
+                }
+                pathVariables.put(variableName, variableValue);
+                apiAnnotationUrl = apiAnnotationUrl.substring(endIndex + 1);
+
+        }
+        return pathVariables;
     }
 }
