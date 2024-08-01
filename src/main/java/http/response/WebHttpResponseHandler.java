@@ -7,13 +7,14 @@ import http.request.WebHttpRequest;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.lang.reflect.InvocationTargetException;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 
 public class WebHttpResponseHandler {
     private WebHttpResponseHandler(){}
-    public static WebHttpResponse getHttpResponse(WebHttpRequest webHttpRequest) throws IOException {
+    public static WebHttpResponse getHttpResponse(WebHttpRequest webHttpRequest) throws InvocationTargetException, IllegalAccessException {
         ResponseEntity response = ApiContext.context().getResponse(webHttpRequest);
         return new WebHttpResponse(response.getStatus(), response.getMessage(), response.getData());
     }

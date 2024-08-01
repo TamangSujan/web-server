@@ -19,7 +19,7 @@ public class WebHttpRequestHandler {
         String body = "Body: ";
         if(meta.length == 2){
             headers = meta[0];
-            body = "Body: "+meta[0];
+            body = "Body: "+meta[1];
         }else{
             headers = meta[0];
         }

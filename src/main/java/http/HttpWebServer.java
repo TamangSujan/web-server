@@ -7,6 +7,7 @@ import http.response.WebHttpResponseHandler;
 import utils.converter.PrimitiveConverter;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
@@ -22,22 +23,25 @@ public class HttpWebServer {
         while(true){
             SocketChannel requester = getRequester(serverSocketChannel);
             new Thread(()->{
-                try {
-                    try(Selector selector = Selector.open()){
-                        setReadModeForRequester(requester, selector);
-                        Iterator<SelectionKey> keys = selector.selectedKeys().iterator();
-                        while(keys.hasNext()){
-                            SelectionKey key = keys.next();
-                            if(key.isValid() && key.isReadable()){
+                try(Selector selector = Selector.open()){
+                    setReadModeForRequester(requester, selector);
+                    Iterator<SelectionKey> keys = selector.selectedKeys().iterator();
+                    while(keys.hasNext()){
+                        SelectionKey key = keys.next();
+                        if(key.isValid() && key.isReadable()){
+                            try {
                                 respondToRequester(key);
+                            } catch (InvocationTargetException | IllegalAccessException e) {
+                                closeRequester(requester);
+                                throw new RuntimeException(e);
                             }
-                            keys.remove();
                         }
-                        requester.close();
-                    }
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
+                        keys.remove();
+                        }
+                } catch (IOException ex) {
+                    throw new RuntimeException(ex);
                 }
+                closeRequester(requester);
             }).start();
         }
     }
@@ -59,7 +63,7 @@ public class HttpWebServer {
         selector.select();
     }
 
-    private static void respondToRequester(SelectionKey key) throws IOException {
+    private static void respondToRequester(SelectionKey key) throws IOException, InvocationTargetException, IllegalAccessException {
         SocketChannel channel = (SocketChannel) key.channel();
         WebHttpRequest request = WebHttpRequestHandler.getHttpRequest(getDataFromRequester(channel));
         WebHttpResponse response = WebHttpResponseHandler.getHttpResponse(request);
@@ -76,5 +80,13 @@ public class HttpWebServer {
         byte[] data = new byte[buffer.remaining()];
         buffer.get(data);
         return data;
+    }
+
+    private static void closeRequester(SocketChannel requester){
+        try {
+            requester.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

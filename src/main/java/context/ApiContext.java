@@ -52,7 +52,7 @@ public class ApiContext {
 
     private void loadRequestBodyHandlers(){
         requestBodyHandlerType = new HashMap<>();
-        requestBodyHandlerType.put(HttpContentType.HTML, new WebHttpRequestFormBodyHandler());
+        requestBodyHandlerType.put(HttpContentType.X_WWW_FORM_URLENCODED, new WebHttpRequestFormBodyHandler());
         requestBodyHandlerType.put(HttpContentType.JSON, new WebHttpRequestFormBodyHandler());
     }
 
@@ -80,7 +80,7 @@ public class ApiContext {
         }
     }
 
-    public ResponseEntity getResponse(WebHttpRequest request){
+    public ResponseEntity getResponse(WebHttpRequest request) throws InvocationTargetException, IllegalAccessException {
         if(!apiContextMap.containsKey(request.getMethod())){
             System.err.println("No such method: "+request.getMethod());
             return new ResponseEntity(404, "Error", "No such method: "+request.getMethod());
@@ -94,11 +94,7 @@ public class ApiContext {
         List<Object> classMethod  = apiAnnotationUrlsKeyMap.get(matchedKey);
         Method method = (Method) classMethod.get(1);
         Object[] attributeValues = getAttributeValuesFromWebRequest(method.getParameters(), request, matchedKey);
-        try {
-            return (ResponseEntity) method.invoke(classMethod.getFirst(), attributeValues);
-        } catch (IllegalAccessException | InvocationTargetException e) {
-            throw new RuntimeException(e);
-        }
+        return (ResponseEntity) method.invoke(classMethod.getFirst(), attributeValues);
     }
 
     private String getMatchedAnnotationUrl(Map<String, List<Object>> apiAnnotationUrlMap, String requestUrl){
@@ -142,22 +138,29 @@ public class ApiContext {
                     continue;
                 }
             }
-            if(parameters[index].getAnnotation(ApiResponseBody.class)!=null && request.getParameters().get("Body").isEmpty()){
-                Map<String, String> body = requestBodyHandlerType.get(request.getContentType()).getBody(request);
+            if(parameters[index].getAnnotation(ApiResponseBody.class)!=null && !request.getBody().isBlank()){
+                Map<String, String> body = requestBodyHandlerType.get(request.getContentType()).getBody(request.getBody());
                 try {
-                    Class<?> clazz = (Class<?>) parameters[index].getType().getDeclaredConstructor().newInstance();
-                    for(Field field: clazz.getFields()){
-                        field.set(field.getName(), body.get(field.getName()));
-                    }
-                    attributeValues[index] = clazz;
-                } catch (InstantiationException | IllegalAccessException | InvocationTargetException |
-                         NoSuchMethodException e) {
+                    attributeValues[index] = getRequiredClassObject(parameters[index], body);
+                } catch (IllegalAccessException | NoSuchMethodException | InvocationTargetException |
+                         InstantiationException e) {
                     throw new RuntimeException(e);
                 }
+                continue;
             }
             attributeValues[index] = null;
         }
         return attributeValues;
+    }
+
+    private Object getRequiredClassObject(Parameter parameter, Map<String, String> fieldMap) throws IllegalAccessException, NoSuchMethodException, InvocationTargetException, InstantiationException {
+        Class<?> clazz = parameter.getType();
+        Object instance = clazz.getDeclaredConstructor().newInstance();
+        for(Field field: clazz.getDeclaredFields()){
+            field.setAccessible(true);
+            field.set(instance, fieldMap.get(field.getName()));
+        }
+        return instance;
     }
 
     private Map<String, String> getPathVariables(String apiAnnotationUrl, String webRequestUrl){

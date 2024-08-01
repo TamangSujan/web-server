@@ -12,6 +12,7 @@ public class WebHttpRequest {
     private String contentType;
     private String method;
     private Map<String, String> parameters;
+    private String body;
 
     public WebHttpRequest(byte[] stream) throws IOException {
         List<String> httpRequestLines = WebHttpRequestHandler.getHttpRequestLines(stream);
@@ -25,6 +26,7 @@ public class WebHttpRequest {
         setContentType(httpRequestMap);
         setMethod(httpRequestMap);
         setParameters(httpRequestMap);
+        setBody(httpRequestMap);
     }
 
     public String getServerPath(){
@@ -45,6 +47,10 @@ public class WebHttpRequest {
 
     public Map<String, String> getParameters(){
         return parameters;
+    }
+
+    public String getBody(){
+        return body;
     }
 
     private void setServerPath(Map<String, String> httpRequestMap){
@@ -70,6 +76,12 @@ public class WebHttpRequest {
     private void setMethod(Map<String, String> httpRequestMap){
         if(httpRequestMap.containsKey("Method"))
             method = httpRequestMap.get("Method");
+    }
+
+    private void setBody(Map<String, String> httpRequestMap){
+        if(httpRequestMap.containsKey("Body")){
+            body = httpRequestMap.get("Body");
+        }
     }
 
     private void setParameters(Map<String, String> httpRequest){
