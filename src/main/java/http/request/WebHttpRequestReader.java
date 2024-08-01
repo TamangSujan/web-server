@@ -5,37 +5,24 @@ import java.io.InputStream;
 
 public class WebHttpRequestReader {
     private WebHttpRequestReader(){}
-
-    public static String[] getRequestLines(InputStream stream) throws IOException {
-        return getStream(stream).toString().split("\n");
-    }
-
-    public static String getRequestStream(InputStream stream) throws IOException {
+     public static String getRequestStream(byte[] stream) {
         return getStream(stream).toString();
     }
 
-    private static StringBuilder getStream(InputStream stream) throws IOException {
+    private static StringBuilder getStream(byte[] stream) {
         StringBuilder requestStream = new StringBuilder();
-        int data;
-        boolean prevCarriageReturn = false;
-        int endOfLineCount = 0;
-        while((data = stream.read())>0 && endOfLineCount < 2){
-            char c = (char) data;
-            if(c == '\r'){
-                prevCarriageReturn = true;
-
-            }else{
-                if(prevCarriageReturn){
-                    if(c=='\n'){
-                        endOfLineCount++;
-                    }else{
-                        endOfLineCount = 0;
-                    }
-                    prevCarriageReturn = false;
-                }
-            }
-            requestStream.append(c);
+        for(byte data: stream){
+            requestStream.append((char) data);
         }
         return requestStream;
+    }
+
+    public static void consumeStream(InputStream stream) throws IOException{
+        int data;
+        StringBuilder buffer = new StringBuilder();
+        while((data = stream.read())>0){
+            buffer.append((char)data);
+        }
+        System.out.println(buffer);
     }
 }

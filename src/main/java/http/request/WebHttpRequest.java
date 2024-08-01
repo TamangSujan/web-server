@@ -13,7 +13,7 @@ public class WebHttpRequest {
     private String method;
     private Map<String, String> parameters;
 
-    public WebHttpRequest(InputStream stream) throws IOException {
+    public WebHttpRequest(byte[] stream) throws IOException {
         List<String> httpRequestLines = WebHttpRequestHandler.getHttpRequestLines(stream);
         Map<String, String> httpRequestMap = WebHttpRequestHandler.getHttpRequestKeyValues(httpRequestLines);
         initRequest(httpRequestMap);

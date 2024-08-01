@@ -1,11 +1,15 @@
 package context;
 
 import annotations.*;
+import http.constant.HttpContentType;
 import http.request.WebHttpRequest;
+import http.request.body.WebHttpRequestBodyHandler;
+import http.request.body.WebHttpRequestFormBodyHandler;
 import http.response.ResponseEntity;
 import utils.clazz.ClassHandler;
 import utils.string.StringUtils;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
@@ -16,6 +20,7 @@ import java.util.Map;
 public class ApiContext {
     private final Map<String, Map<String, List<Object>>> apiContextMap = new HashMap<>();
     private static ApiContext apiContext;
+    private Map<String, WebHttpRequestBodyHandler> requestBodyHandlerType;
     private ApiContext(){
         List<Class<?>> classes = null;
         try {
@@ -24,6 +29,7 @@ public class ApiContext {
             throw new RuntimeException(e);
         }
         loadApis(classes);
+        loadRequestBodyHandlers();
     }
 
     public static ApiContext context() {
@@ -42,6 +48,12 @@ public class ApiContext {
                 }
             }
         }
+    }
+
+    private void loadRequestBodyHandlers(){
+        requestBodyHandlerType = new HashMap<>();
+        requestBodyHandlerType.put(HttpContentType.HTML, new WebHttpRequestFormBodyHandler());
+        requestBodyHandlerType.put(HttpContentType.JSON, new WebHttpRequestFormBodyHandler());
     }
 
     private void loadGetApi(Method method, Class<?> clazz){
@@ -73,10 +85,6 @@ public class ApiContext {
             System.err.println("No such method: "+request.getMethod());
             return new ResponseEntity(404, "Error", "No such method: "+request.getMethod());
         }
-        /*if(!apiContextMap.get(request.getMethod()).containsKey(request.getServerPath())){
-            System.err.println("No such url: "+request.getServerPath());
-            return new ResponseEntity(404, "Error", "No such url: "+request.getServerPath());
-        }*/
         Map<String, List<Object>> apiAnnotationUrlsKeyMap = apiContextMap.get(request.getMethod());
         String matchedKey = getMatchedAnnotationUrl(apiAnnotationUrlsKeyMap, request.getServerPath());
         if(matchedKey == null){
@@ -132,6 +140,19 @@ public class ApiContext {
                 if(pathVariables.containsKey(pathVariableName)){
                     attributeValues[index] = pathVariables.get(pathVariableName);
                     continue;
+                }
+            }
+            if(parameters[index].getAnnotation(ApiResponseBody.class)!=null && request.getParameters().get("Body").isEmpty()){
+                Map<String, String> body = requestBodyHandlerType.get(request.getContentType()).getBody(request);
+                try {
+                    Class<?> clazz = (Class<?>) parameters[index].getType().getDeclaredConstructor().newInstance();
+                    for(Field field: clazz.getFields()){
+                        field.set(field.getName(), body.get(field.getName()));
+                    }
+                    attributeValues[index] = clazz;
+                } catch (InstantiationException | IllegalAccessException | InvocationTargetException |
+                         NoSuchMethodException e) {
+                    throw new RuntimeException(e);
                 }
             }
             attributeValues[index] = null;
