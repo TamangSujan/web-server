@@ -1,5 +1,8 @@
 package http.request;
 
+import http.constant.HttpContentType;
+import http.request.line.RequestLineHandlerContext;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -13,18 +16,18 @@ public class WebHttpRequestHandler {
         return new WebHttpRequest(stream);
     }
 
-    protected static List<String> getHttpRequestLines(byte[] stream) throws IOException {
-        String[] meta = WebHttpRequestReader.getRequestStream(stream).split("\r\n\r\n");
-        String headers;
-        String body = "Body: ";
-        if(meta.length == 2){
-            headers = meta[0];
-            body = "Body: "+meta[1];
-        }else{
-            headers = meta[0];
+    protected static List<String> getHttpRequestLines(byte[] stream) {
+        String meta = WebHttpRequestReader.getRequestStream(stream);
+        int contentTypeIndex = meta.indexOf("content-type: ");
+        String contentType = HttpContentType.X_WWW_FORM_URLENCODED;
+        if(contentTypeIndex != -1) {
+            contentType = meta.substring(contentTypeIndex);
+            contentType = contentType.substring(0, contentType.indexOf("\r\n"));
+            if (contentType.contains(";")) {
+                contentType = contentType.substring(0, contentType.indexOf(";"));
+            }
         }
-        List<String> requestLines = new LinkedList<>(Arrays.asList(headers.split("\r\n")));
-        requestLines.add(body);
+        List<String> requestLines = RequestLineHandlerContext.context().getLineHandler(contentType).getRequestLines(stream);
         initializeHttpMethodPathAndVersion(requestLines);
         return requestLines;
     }

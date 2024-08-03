@@ -6,15 +6,7 @@ import java.io.InputStream;
 public class WebHttpRequestReader {
     private WebHttpRequestReader(){}
      public static String getRequestStream(byte[] stream) {
-        return getStream(stream).toString();
-    }
-
-    private static StringBuilder getStream(byte[] stream) {
-        StringBuilder requestStream = new StringBuilder();
-        for(byte data: stream){
-            requestStream.append((char) data);
-        }
-        return requestStream;
+        return new String(stream);
     }
 
     public static void consumeStream(InputStream stream) throws IOException{
